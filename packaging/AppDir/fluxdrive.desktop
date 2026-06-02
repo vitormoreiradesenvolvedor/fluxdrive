@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=FluxDrive
+Comment=Bootable USB Creator for Linux
+Exec=fluxdrive
+Icon=fluxdrive
+Type=Application
+Categories=System;Utility;
+Keywords=USB;ISO;Boot;Bootable;Flash;Rufus;

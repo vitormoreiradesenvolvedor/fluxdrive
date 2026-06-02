@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# AppImage entry point — sets up the environment and launches FluxDrive.
+
+HERE="$(dirname "$(readlink -f "${0}")")"
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH:-}"
+export PYTHONPATH="${HERE}/usr/lib/python3/dist-packages:${PYTHONPATH:-}"
+export QT_PLUGIN_PATH="${HERE}/usr/plugins:${QT_PLUGIN_PATH:-}"
+export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+# Request root if not already running as root
+if [[ "$(id -u)" -ne 0 ]]; then
+    if command -v pkexec &>/dev/null; then
+        exec pkexec "${0}" "$@"
+    else
+        exec sudo "${0}" "$@"
+    fi
+fi
+
+exec "${HERE}/usr/bin/fluxdrive" "$@"

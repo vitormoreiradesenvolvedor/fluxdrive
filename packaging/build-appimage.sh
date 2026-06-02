@@ -27,8 +27,9 @@ echo "Building FluxDrive AppImage v${VERSION} (${ARCH})…"
 mkdir -p "${DIST_DIR}" "${APPDIR}/usr/"{bin,lib,share/{applications,icons/hicolor/256x256/apps}}
 
 # ─── Install app into AppDir ──────────────────────────────────────────────
+PIP="${PIP:-$(command -v pip3 2>/dev/null || command -v pip 2>/dev/null || echo "python3 -m pip")}"
 cd "${ROOT}"
-pip install --quiet --prefix="${APPDIR}/usr" --no-deps -e .
+${PIP} install --quiet --prefix="${APPDIR}/usr" --no-deps -e .
 cp -r "${ROOT}/src/fluxdrive" "${APPDIR}/usr/lib/python3/dist-packages/" 2>/dev/null || true
 
 # ─── Desktop entry ────────────────────────────────────────────────────────

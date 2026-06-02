@@ -153,6 +153,10 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+      - name: Install Qt system libs (required by extension-pkg-allow-list=PyQt6)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libegl1 libxcb-xinerama0
       - run: pip install -e ".[dev]"
       - name: Run pylint (score mínimo 9.5/10)
         run: |
@@ -283,7 +287,8 @@ jobs:
           pytest tests/quality/ \
             -v \
             --tb=short \
-            -x
+            -x \
+            -p no:qt
 
   # ─── Gate Final: todos devem passar ──────────────────────────────────────
   quality-gate:

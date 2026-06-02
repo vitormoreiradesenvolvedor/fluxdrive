@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
 # Bloqueia push direto para master e development.
+# Bloqueia push de branches criadas a partir de master (após divergência).
 # Essas branches só recebem código via merge de PRs aprovados na CI.
 
 PROTECTED_BRANCHES="^refs/heads/(master|development)$"
+NULL_SHA="0000000000000000000000000000000000000000"
 
 while read local_ref local_sha remote_ref remote_sha; do
+
+    # ─── Bloqueia pushes para master e development ────────────────────────
     if [[ "$remote_ref" =~ $PROTECTED_BRANCHES ]]; then
+        # Permite apenas o push inicial (quando a branch ainda não existe no remoto)
+        if [[ "$remote_sha" == "$NULL_SHA" ]]; then
+            continue
+        fi
+
         BRANCH_NAME=$(echo "$remote_ref" | sed 's|refs/heads/||')
         echo ""
         echo "╔══════════════════════════════════════════════════════════════╗"
@@ -23,6 +32,36 @@ while read local_ref local_sha remote_ref remote_sha; do
         echo ""
         exit 1
     fi
+
+    # ─── Bloqueia push de branches não baseadas em development ───────────
+    # (Aplica somente quando master e development já divergiram)
+    if [[ "$remote_sha" == "$NULL_SHA" ]]; then
+        BRANCH_NAME=$(echo "$remote_ref" | sed 's|refs/heads/||')
+
+        MASTER_TIP=$(git rev-parse origin/master 2>/dev/null || echo "")
+        DEV_TIP=$(git rev-parse origin/development 2>/dev/null || echo "")
+
+        # Só verifica se ambas as branches remotas existem e divergiram
+        if [[ -n "$MASTER_TIP" && -n "$DEV_TIP" && "$MASTER_TIP" != "$DEV_TIP" ]]; then
+            if ! git merge-base --is-ancestor origin/development "$local_sha" 2>/dev/null; then
+                echo ""
+                echo "╔══════════════════════════════════════════════════════════════╗"
+                echo "║  PUSH BLOQUEADO — branch não baseada em 'development'        ║"
+                echo "╠══════════════════════════════════════════════════════════════╣"
+                echo "║  A branch '$BRANCH_NAME' foi criada a partir de 'master'    ║"
+                echo "║  em vez de 'development'. Isso é proibido.                  ║"
+                echo "║                                                              ║"
+                echo "║  Para corrigir:                                              ║"
+                echo "║    git checkout development                                  ║"
+                echo "║    git branch -D $BRANCH_NAME                               ║"
+                echo "║    git checkout -b $BRANCH_NAME                             ║"
+                echo "╚══════════════════════════════════════════════════════════════╝"
+                echo ""
+                exit 1
+            fi
+        fi
+    fi
+
 done
 
 exit 0

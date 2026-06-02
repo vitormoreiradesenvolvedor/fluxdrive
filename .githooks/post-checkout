@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Detecta criação de branch a partir de 'master' e corrige automaticamente.
+# Branches DEVEM ser criadas exclusivamente a partir de 'development'.
+
+# Guarda contra chamadas recursivas geradas por este próprio hook
+[[ -n "$FLUXDRIVE_HOOK_ACTIVE" ]] && exit 0
+export FLUXDRIVE_HOOK_ACTIVE=1
+
+PREV_HEAD="$1"
+BRANCH_CHANGED="$3"
+
+# Só age em checkouts de branch (não em checkout de arquivo)
+[[ "$BRANCH_CHANGED" == "1" ]] || exit 0
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+# Branches protegidas não precisam de verificação
+[[ "$CURRENT_BRANCH" =~ ^(master|development)$ ]] && exit 0
+
+# Só age em branches NOVAS (sem upstream configurado)
+git rev-parse --verify "@{upstream}" &>/dev/null && exit 0
+
+# Obtém o SHA atual de master
+MASTER_SHA=$(git rev-parse refs/heads/master 2>/dev/null || echo "")
+
+# Se não existe master local ou o HEAD anterior não era master, sai
+[[ -z "$MASTER_SHA" || "$PREV_HEAD" != "$MASTER_SHA" ]] && exit 0
+
+# ─── Branch criada a partir de master — corrigir automaticamente ──────────
+echo ""
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║  BRANCH INVÁLIDA — criada a partir de 'master'              ║"
+echo "╠══════════════════════════════════════════════════════════════╣"
+echo "║  Branches devem ser criadas APENAS a partir de 'development'.║"
+echo "║  Corrigindo automaticamente…                                 ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
+echo ""
+
+# Recria a branch a partir de development
+git checkout development
+git branch -D "$CURRENT_BRANCH"
+git checkout -b "$CURRENT_BRANCH"
+
+echo "✓ Branch '$CURRENT_BRANCH' recriada corretamente a partir de 'development'."
+echo ""
+
+exit 0

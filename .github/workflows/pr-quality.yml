@@ -16,28 +16,38 @@ jobs:
     name: Branch Protection Guard
     runs-on: ubuntu-24.04
     steps:
-      - name: Verify source branch for master PRs
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Block any PR targeting master from anywhere except development
         if: github.base_ref == 'master'
         run: |
-          if [[ "${{ github.head_ref }}" != "development" ]]; then
+          HEAD="${{ github.head_ref }}"
+          if [[ "$HEAD" != "development" ]]; then
             echo "╔══════════════════════════════════════════════════════════════╗"
-            echo "║  PR REJEITADO — master só aceita merges de 'development'    ║"
-            echo "║  Branch de origem: '${{ github.head_ref }}'                 ║"
+            echo "║  PR REJEITADO — master SOMENTE aceita merges de 'development'║"
+            echo "║  Branch de origem: '$HEAD'                                   ║"
             echo "╚══════════════════════════════════════════════════════════════╝"
             exit 1
           fi
           echo "✓ Origem válida: development → master"
 
-      - name: Verify source branch for development PRs
+      - name: Block PRs from master or invalid names targeting development
         if: github.base_ref == 'development'
         run: |
           HEAD="${{ github.head_ref }}"
+
+          # Bloqueia master → development explicitamente (por nome)
           if [[ "$HEAD" == "master" ]]; then
             echo "╔══════════════════════════════════════════════════════════════╗"
-            echo "║  PR REJEITADO — master não pode abrir PR para development   ║"
+            echo "║  PR REJEITADO — master NUNCA pode abrir PR para development ║"
+            echo "║  O fluxo é: development → master (não o inverso)            ║"
             echo "╚══════════════════════════════════════════════════════════════╝"
             exit 1
           fi
+
+          # Valida prefixo obrigatório do nome da branch
           if [[ ! "$HEAD" =~ ^(feature|fix|chore|refactor|hotfix|test|docs|ci|perf)/ ]]; then
             echo "╔══════════════════════════════════════════════════════════════╗"
             echo "║  PR REJEITADO — nome de branch inválido: '$HEAD'            ║"
@@ -46,7 +56,36 @@ jobs:
             echo "╚══════════════════════════════════════════════════════════════╝"
             exit 1
           fi
+
           echo "✓ Branch válida: $HEAD → development"
+
+      - name: Block branches created from master (ancestry check)
+        if: github.base_ref == 'development'
+        run: |
+          git fetch origin master development --depth=100
+
+          MASTER_TIP=$(git rev-parse origin/master)
+          DEV_TIP=$(git rev-parse origin/development)
+
+          # Só verifica se master e development divergiram
+          if [[ "$MASTER_TIP" == "$DEV_TIP" ]]; then
+            echo "✓ master e development no mesmo commit — ancestry check ignorado."
+            exit 0
+          fi
+
+          HEAD_SHA=$(git rev-parse HEAD)
+
+          # A branch deve ter development como ancestral (foi criada de development)
+          if ! git merge-base --is-ancestor "$DEV_TIP" "$HEAD_SHA" 2>/dev/null; then
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║  PR REJEITADO — branch não foi criada a partir de development║"
+            echo "║  Branches filhas DEVEM partir de 'development', nunca de    ║"
+            echo "║  'master' ou de qualquer outro ponto não autorizado.         ║"
+            echo "╚══════════════════════════════════════════════════════════════╝"
+            exit 1
+          fi
+
+          echo "✓ Ancestry check: branch corretamente baseada em development."
 
   # ─── Configuração do ambiente Python ─────────────────────────────────────
   setup:

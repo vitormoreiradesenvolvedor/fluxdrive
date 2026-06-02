@@ -37,7 +37,6 @@ Thumbs.db
 *.qmlc
 *.jsc
 
-# Build artifacts
-AppDir/
+# Build artifacts — build/ already covers build/appimage/AppDir/
 linuxdeploy*.AppImage
 linuxdeploy-plugin*.AppImage

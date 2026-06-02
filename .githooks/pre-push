@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Bloqueia push direto para master e development.
+# Essas branches só recebem código via merge de PRs aprovados na CI.
+
+PROTECTED_BRANCHES="^refs/heads/(master|development)$"
+
+while read local_ref local_sha remote_ref remote_sha; do
+    if [[ "$remote_ref" =~ $PROTECTED_BRANCHES ]]; then
+        BRANCH_NAME=$(echo "$remote_ref" | sed 's|refs/heads/||')
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║  PUSH BLOQUEADO — branch protegida: '$BRANCH_NAME'          ║"
+        echo "╠══════════════════════════════════════════════════════════════╣"
+        echo "║  Push direto em 'master' e 'development' é terminantemente  ║"
+        echo "║  proibido. O fluxo obrigatório é:                           ║"
+        echo "║                                                              ║"
+        echo "║  1. Crie uma branch filha a partir de development            ║"
+        echo "║  2. Implemente sua mudança                                   ║"
+        echo "║  3. Abra um PR da branch filha → development                ║"
+        echo "║  4. A CI validará SOLID + testes + qualidade                ║"
+        echo "║  5. Após aprovação, o merge é feito via GitHub               ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo ""
+        exit 1
+    fi
+done
+
+exit 0

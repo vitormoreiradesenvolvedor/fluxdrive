@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Valida formato de mensagem de commit (Conventional Commits).
+# Padrão: <tipo>(<escopo opcional>): <descrição>
+# Tipos válidos: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Ignora commits de merge e squash
+if echo "$COMMIT_MSG" | grep -qE "^(Merge|Squash|Revert) "; then
+    exit 0
+fi
+
+PATTERN="^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?: .{1,100}$"
+
+if ! echo "$COMMIT_MSG" | head -1 | grep -qE "$PATTERN"; then
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  COMMIT REJEITADO — mensagem fora do padrão Conventional     ║"
+    echo "╠══════════════════════════════════════════════════════════════╣"
+    echo "║  Formato obrigatório:                                        ║"
+    echo "║    <tipo>(<escopo>): <descrição curta>                       ║"
+    echo "║                                                              ║"
+    echo "║  Tipos válidos:                                              ║"
+    echo "║    feat     - nova funcionalidade                            ║"
+    echo "║    fix      - correção de bug                                ║"
+    echo "║    docs     - documentação                                   ║"
+    echo "║    refactor - refatoração sem mudança de comportamento       ║"
+    echo "║    test     - adição/correção de testes                      ║"
+    echo "║    chore    - manutenção, deps, configs                      ║"
+    echo "║    ci       - mudanças em CI/CD                              ║"
+    echo "║    perf     - melhoria de performance                        ║"
+    echo "║    style    - formatação, espaços (sem mudança de lógica)    ║"
+    echo "║                                                              ║"
+    echo "║  Exemplos válidos:                                           ║"
+    echo "║    feat(writer): add DD mode ISO writing                    ║"
+    echo "║    fix(device): handle disconnected drives gracefully       ║"
+    echo "║    test(hash): add SHA512 verification tests                ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "  Sua mensagem: '$COMMIT_MSG'"
+    echo ""
+    exit 1
+fi
+
+exit 0

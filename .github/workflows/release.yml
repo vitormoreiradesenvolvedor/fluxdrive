@@ -1,0 +1,127 @@
+name: Release — Stable Build & Tag
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  validate-origin:
+    name: Validate merge origin
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 10
+      - name: Ensure merge came from development
+        run: |
+          PARENT_BRANCHES=$(git log --merges --oneline -1 || echo "")
+          MERGE_MSG=$(git log --oneline -1 --pretty=format:"%s")
+          echo "Último commit: $MERGE_MSG"
+          # Verifica se é um merge commit vindo de development
+          if git log --merges -1 --pretty=format:"%P" | xargs -I{} git branch --contains {} --remote 2>/dev/null | grep -q "development"; then
+            echo "✓ Merge validado: vindo de development"
+          else
+            echo "⚠ Aviso: não foi possível confirmar origem via development. Continuando (branch protection do GitHub é a garantia primária)."
+          fi
+
+  release:
+    name: Build Stable AppImage & Create Release Tag
+    runs-on: ubuntu-24.04
+    needs: validate-origin
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libxcb-xinerama0 libxcb-cursor0 libegl1 libgl1 \
+            libfuse2 wget patchelf desktop-file-utils \
+            libglib2.0-dev
+          pip install --upgrade pip
+          pip install -e ".[dev]" pyinstaller
+
+      - name: Get version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(d['project']['version'])")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Release version: v${VERSION}"
+
+      - name: Ensure tag does not already exist
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if git tag -l | grep -q "^${TAG}$"; then
+            echo "Tag ${TAG} já existe. Incremente a versão em pyproject.toml antes de mergear."
+            exit 1
+          fi
+
+      - name: Build AppImage
+        run: |
+          chmod +x packaging/build-appimage.sh
+          VERSION="${{ steps.version.outputs.version }}" \
+            bash packaging/build-appimage.sh
+
+      - name: Generate checksums
+        run: |
+          cd dist/
+          sha256sum FluxDrive-*.AppImage > FluxDrive-${{ steps.version.outputs.version }}.AppImage.sha256
+          sha512sum FluxDrive-*.AppImage >> FluxDrive-${{ steps.version.outputs.version }}.AppImage.sha512
+
+      - name: Create stable git tag
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          git config user.email "vitormoreiradesenvolvedor@gmail.com"
+          git config user.name "Vitor Moreira"
+          git tag -a "$TAG" -m "Release: $TAG"
+          git push origin "$TAG"
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          NOTES=$(sed -n "/^## \[$VERSION\]/,/^## \[/p" CHANGELOG.md 2>/dev/null | head -n -1 || echo "Ver commits para detalhes.")
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub stable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "FluxDrive ${{ steps.version.outputs.version }}"
+          prerelease: false
+          body: |
+            ## FluxDrive ${{ steps.version.outputs.version }}
+
+            Alternativa Linux ao Rufus para criação de USBs bootáveis.
+
+            ### Instalação
+            ```bash
+            chmod +x FluxDrive-${{ steps.version.outputs.version }}-x86_64.AppImage
+            ./FluxDrive-${{ steps.version.outputs.version }}-x86_64.AppImage
+            ```
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ### Checksums
+            Verifique a integridade do download com os arquivos `.sha256` e `.sha512`.
+          files: |
+            dist/FluxDrive-*.AppImage
+            dist/FluxDrive-*.sha256
+            dist/FluxDrive-*.sha512

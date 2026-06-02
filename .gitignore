@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.AppImage
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# IDE / editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Qt
+*.qmlc
+*.jsc
+
+# Build artifacts
+AppDir/
+linuxdeploy*.AppImage
+linuxdeploy-plugin*.AppImage

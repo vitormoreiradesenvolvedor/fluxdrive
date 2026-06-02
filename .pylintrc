@@ -1,0 +1,72 @@
+[MASTER]
+jobs=4
+suggestion-mode=yes
+unsafe-load-any-extension=no
+
+[MESSAGES CONTROL]
+# Habilita checks relevantes para SOLID
+enable=
+    all
+
+disable=
+    # Supressões mínimas justificadas
+    too-few-public-methods,   # Value Objects e DTOs são intencionalmente pequenos
+    fixme,                    # TODOs são permitidos em código de desenvolvimento
+
+[REPORTS]
+output-format=colorized
+reports=yes
+score=yes
+
+[REFACTORING]
+max-nested-blocks=3
+
+[BASIC]
+# Clean Code: nomes descritivos
+good-names=i,j,k,ex,Run,_
+include-naming-hint=yes
+
+# Nomenclatura mínima — evita abreviações
+argument-naming-style=snake_case
+attr-naming-style=snake_case
+class-naming-style=PascalCase
+const-naming-style=UPPER_CASE
+function-naming-style=snake_case
+method-naming-style=snake_case
+module-naming-style=snake_case
+variable-naming-style=snake_case
+
+[FORMAT]
+max-line-length=100
+indent-string='    '
+indent-after-paren=4
+expected-line-ending-format=LF
+
+[SIMILARITIES]
+min-similarity-lines=6
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=yes
+
+[DESIGN]
+# SOLID / Clean Code: limites de responsabilidade
+max-args=5               # Mais que 5 parâmetros viola o princípio da coesão
+max-attributes=10        # Limite de atributos por classe (SRP)
+max-bool-expr=5
+max-branches=8           # Baixa complexidade ciclomática
+max-locals=15
+max-parents=3            # Herança rasa (Liskov)
+max-public-methods=15    # SRP: classes com muitos métodos têm mais de uma responsabilidade
+max-returns=4
+max-statements=40
+min-public-methods=1
+
+[CLASSES]
+# Forçar uso de ABCs para interfaces (DIP)
+valid-metaclass-classmethod-first-arg=mcs
+
+[IMPORTS]
+allow-wildcard-with-all=no
+
+[EXCEPTIONS]
+overgeneral-exceptions=builtins.Exception,builtins.BaseException

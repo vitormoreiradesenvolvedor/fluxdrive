@@ -1,0 +1,309 @@
+name: Quality Gate — PR
+
+on:
+  pull_request:
+    branches: [development, master]
+    types: [opened, synchronize, reopened]
+
+# Cancela runs anteriores do mesmo PR para economizar recursos
+concurrency:
+  group: quality-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Guarda de branch: master só aceita PRs de development ───────────────
+  branch-guard:
+    name: Branch Protection Guard
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify source branch for master PRs
+        if: github.base_ref == 'master'
+        run: |
+          if [[ "${{ github.head_ref }}" != "development" ]]; then
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║  PR REJEITADO — master só aceita merges de 'development'    ║"
+            echo "║  Branch de origem: '${{ github.head_ref }}'                 ║"
+            echo "╚══════════════════════════════════════════════════════════════╝"
+            exit 1
+          fi
+          echo "✓ Origem válida: development → master"
+
+      - name: Verify source branch for development PRs
+        if: github.base_ref == 'development'
+        run: |
+          HEAD="${{ github.head_ref }}"
+          if [[ "$HEAD" == "master" ]]; then
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║  PR REJEITADO — master não pode abrir PR para development   ║"
+            echo "╚══════════════════════════════════════════════════════════════╝"
+            exit 1
+          fi
+          if [[ ! "$HEAD" =~ ^(feature|fix|chore|refactor|hotfix|test|docs|ci|perf)/ ]]; then
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║  PR REJEITADO — nome de branch inválido: '$HEAD'            ║"
+            echo "║  Use: feature/, fix/, chore/, refactor/, hotfix/,           ║"
+            echo "║       test/, docs/, ci/, perf/                              ║"
+            echo "╚══════════════════════════════════════════════════════════════╝"
+            exit 1
+          fi
+          echo "✓ Branch válida: $HEAD → development"
+
+  # ─── Configuração do ambiente Python ─────────────────────────────────────
+  setup:
+    name: Setup Python Environment
+    runs-on: ubuntu-24.04
+    needs: branch-guard
+    outputs:
+      python-version: "3.11"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('pyproject.toml') }}
+
+  # ─── Formatação ──────────────────────────────────────────────────────────
+  formatting:
+    name: Code Formatting (black + isort)
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install black isort
+      - name: Check black formatting
+        run: black --check --diff src/ tests/
+      - name: Check isort import ordering
+        run: isort --check-only --diff src/ tests/
+
+  # ─── Tipagem Estática ─────────────────────────────────────────────────────
+  type-checking:
+    name: Static Type Analysis (mypy strict)
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Run mypy in strict mode
+        run: mypy src/fluxdrive --strict --ignore-missing-imports
+
+  # ─── Linting e SOLID ─────────────────────────────────────────────────────
+  linting:
+    name: Lint & SOLID Compliance (pylint)
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Run pylint (score mínimo 9.5/10)
+        run: |
+          pylint src/fluxdrive \
+            --fail-under=9.5 \
+            --rcfile=.pylintrc \
+            --output-format=colorized
+
+  # ─── Documentação ────────────────────────────────────────────────────────
+  documentation:
+    name: Docstring Coverage (interrogate 100%)
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install interrogate
+      - name: Verify 100% docstring coverage on public APIs
+        run: |
+          interrogate src/fluxdrive \
+            --verbose \
+            --fail-under=100 \
+            --ignore-init-module \
+            --ignore-magic \
+            --ignore-property-decorators
+
+  # ─── Complexidade ────────────────────────────────────────────────────────
+  complexity:
+    name: Code Complexity (radon)
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install radon
+      - name: Cyclomatic complexity ≤ 10 per function
+        run: |
+          radon cc src/fluxdrive --min B --show-complexity
+          VIOLATIONS=$(radon cc src/fluxdrive --min C -s | grep -v "^$" || true)
+          if [[ -n "$VIOLATIONS" ]]; then
+            echo "╔══════════════════════════════════════════════╗"
+            echo "║  COMPLEXIDADE CICLOMÁTICA EXCEDIDA (> 10)   ║"
+            echo "╚══════════════════════════════════════════════╝"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+      - name: Maintainability index ≥ 65 (grade B or better)
+        run: |
+          FAILED=$(radon mi src/fluxdrive --min B | grep -E "^src" | grep -v "(A)\|(B)" || true)
+          if [[ -n "$FAILED" ]]; then
+            echo "Maintainability index abaixo do mínimo (B):"
+            echo "$FAILED"
+            exit 1
+          fi
+
+  # ─── Segurança ───────────────────────────────────────────────────────────
+  security:
+    name: Security Audit (bandit)
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install bandit
+      - name: Run bandit security scan (no HIGH severity)
+        run: |
+          bandit -r src/fluxdrive \
+            --severity-level high \
+            --confidence-level high \
+            -f txt
+
+  # ─── Testes Unitários e Cobertura ────────────────────────────────────────
+  tests:
+    name: Tests & Coverage (≥ 80%)
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install system deps for tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libxcb-xinerama0 libxcb-cursor0 libegl1 libgl1 \
+            xvfb
+      - run: pip install -e ".[dev]"
+      - name: Run tests with coverage
+        run: |
+          xvfb-run -a pytest tests/ \
+            --cov=src/fluxdrive \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=80 \
+            -v
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ─── Qualidade SOLID customizada ─────────────────────────────────────────
+  solid-quality:
+    name: SOLID + Design Patterns Compliance
+    runs-on: ubuntu-24.04
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Run custom SOLID compliance tests
+        run: |
+          pytest tests/quality/ \
+            -v \
+            --tb=short \
+            -x
+
+  # ─── Gate Final: todos devem passar ──────────────────────────────────────
+  quality-gate:
+    name: Quality Gate — Final Verdict
+    runs-on: ubuntu-24.04
+    needs:
+      - formatting
+      - type-checking
+      - linting
+      - documentation
+      - complexity
+      - security
+      - tests
+      - solid-quality
+    if: always()
+    steps:
+      - name: Evaluate all quality checks
+        run: |
+          RESULTS=(
+            "${{ needs.formatting.result }}"
+            "${{ needs.type-checking.result }}"
+            "${{ needs.linting.result }}"
+            "${{ needs.documentation.result }}"
+            "${{ needs.complexity.result }}"
+            "${{ needs.security.result }}"
+            "${{ needs.tests.result }}"
+            "${{ needs.solid-quality.result }}"
+          )
+          NAMES=(
+            "Formatação"
+            "Tipagem Estática"
+            "Lint + SOLID"
+            "Documentação"
+            "Complexidade"
+            "Segurança"
+            "Testes + Cobertura"
+            "SOLID + Padrões"
+          )
+          FAILED=0
+          echo ""
+          echo "═══════════════════════════════════════════════════"
+          echo "  RELATÓRIO DE QUALIDADE — FLUXDRIVE"
+          echo "═══════════════════════════════════════════════════"
+          for i in "${!RESULTS[@]}"; do
+            if [[ "${RESULTS[$i]}" == "success" ]]; then
+              echo "  ✓ ${NAMES[$i]}"
+            else
+              echo "  ✗ ${NAMES[$i]} — FALHOU (${RESULTS[$i]})"
+              FAILED=1
+            fi
+          done
+          echo "═══════════════════════════════════════════════════"
+          if [[ $FAILED -eq 1 ]]; then
+            echo ""
+            echo "  PR BLOQUEADO: requisitos de qualidade não atendidos."
+            echo "  Todos os checks acima são obrigatórios e irrevogáveis."
+            echo ""
+            exit 1
+          fi
+          echo ""
+          echo "  PR APROVADO: todos os requisitos de qualidade atendidos."
+          echo ""

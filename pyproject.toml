@@ -1,0 +1,136 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "fluxdrive"
+version = "0.1.0"
+description = "Linux alternative to Rufus — bootable USB creator"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.11"
+keywords = ["usb", "bootable", "iso", "linux", "rufus"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Installation/Setup",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "PyQt6>=6.6.0",
+    "pyudev>=0.24.0",
+    "requests>=2.31.0",
+    "psutil>=5.9.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Tests
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-qt>=4.2.0",
+    "pytest-mock>=3.12.0",
+    # Type checking
+    "mypy>=1.5.0",
+    "types-requests>=2.31.0",
+    # Linting / SOLID
+    "pylint>=3.0.0",
+    # Formatting
+    "black>=23.7.0",
+    "isort>=5.12.0",
+    # Documentation
+    "interrogate>=1.5.0",
+    # Complexity
+    "radon>=6.0.1",
+    # Security
+    "bandit>=1.7.5",
+    # Build
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+fluxdrive = "fluxdrive.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fluxdrive = ["ui/resources/*.qss", "ui/i18n/*.py"]
+
+# ─── Black ────────────────────────────────────────────────────────────────
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+
+# ─── isort ────────────────────────────────────────────────────────────────
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["fluxdrive"]
+
+# ─── mypy ─────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_no_return = true
+warn_unreachable = true
+
+# ─── pytest ───────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--strict-markers",
+    "-ra",
+    "--tb=short",
+]
+markers = [
+    "unit: unit tests (no external dependencies)",
+    "integration: integration tests (may need system tools)",
+    "quality: code quality compliance tests",
+    "slow: tests that take more than 1 second",
+]
+
+# ─── Coverage ────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["src/fluxdrive"]
+omit = ["*/tests/*", "*/ui/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+]
+
+# ─── interrogate ─────────────────────────────────────────────────────────
+[tool.interrogate]
+ignore-init-module = true
+ignore-magic = true
+ignore-property-decorators = true
+fail-under = 100
+verbose = 1
+
+# ─── bandit ──────────────────────────────────────────────────────────────
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = []

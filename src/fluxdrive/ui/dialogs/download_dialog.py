@@ -13,7 +13,11 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
+
+from fluxdrive.application.contracts.i_downloader import DownloadableIso
+from fluxdrive.ui.view_models.main_view_model import MainViewModel
 
 
 class DownloadDialog(QDialog):
@@ -23,16 +27,16 @@ class DownloadDialog(QDialog):
     download the selected ISO to a chosen directory.
     """
 
-    def __init__(self, view_model: object, parent: object = None) -> None:
+    def __init__(self, view_model: object, parent: QWidget | None = None) -> None:
         """Initialize the download dialog.
 
         Args:
             view_model: MainViewModel providing download use case access.
             parent: Optional parent widget.
         """
-        super().__init__(parent)  # type: ignore[call-arg]
+        super().__init__(parent)
         self._vm = view_model
-        self._iso_list: list = []
+        self._iso_list: list[DownloadableIso] = []
         self.setWindowTitle("Download ISO")
         self.setMinimumSize(500, 400)
         self._build_ui()
@@ -68,8 +72,6 @@ class DownloadDialog(QDialog):
 
     def _load_iso_list(self) -> None:
         """Populate the list widget with curated ISO descriptors."""
-        from fluxdrive.ui.view_models.main_view_model import MainViewModel
-
         if not isinstance(self._vm, MainViewModel):
             return
 
@@ -85,9 +87,7 @@ class DownloadDialog(QDialog):
         row = self._list_widget.currentRow()
         if 0 <= row < len(self._iso_list):
             iso = self._iso_list[row]
-            self._info_label.setText(
-                f"Version: {iso.version}  |  Arch: {iso.architecture}"
-            )
+            self._info_label.setText(f"Version: {iso.version}  |  Arch: {iso.architecture}")
 
     def _on_download(self) -> None:
         """Start downloading the selected ISO to a user-chosen directory."""

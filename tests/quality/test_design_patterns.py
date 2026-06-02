@@ -26,11 +26,7 @@ def _python_files(path: Path) -> list[Path]:
     Returns:
         Sorted list of .py file paths.
     """
-    return [
-        p
-        for p in sorted(path.rglob("*.py"))
-        if "__pycache__" not in str(p)
-    ]
+    return [p for p in sorted(path.rglob("*.py")) if "__pycache__" not in str(p)]
 
 
 @pytest.mark.quality
@@ -75,9 +71,9 @@ class TestValueObjectImmutability:
             fields = dataclasses.fields(cls)
             assert fields, f"{cls.__name__} has no dataclass fields"
             params = cls.__dataclass_params__  # type: ignore[attr-defined]
-            assert params.frozen, (
-                f"{cls.__name__} must be a frozen dataclass (immutable Value Object)"
-            )
+            assert (
+                params.frozen
+            ), f"{cls.__name__} must be a frozen dataclass (immutable Value Object)"
 
 
 @pytest.mark.quality
@@ -103,9 +99,10 @@ class TestAbstractionLayering:
                                 f"— imports '{node.module}' (layer violation)"
                             )
 
-        assert not violations, (
-            "Domain layer imports upper layers (Clean Architecture violation):\n"
-            + "\n".join(violations)
+        assert (
+            not violations
+        ), "Domain layer imports upper layers (Clean Architecture violation):\n" + "\n".join(
+            violations
         )
 
     def test_application_does_not_import_infrastructure(self) -> None:
@@ -126,9 +123,8 @@ class TestAbstractionLayering:
                             f"— contract imports infrastructure: '{node.module}'"
                         )
 
-        assert not violations, (
-            "Contracts import infrastructure (DIP violation):\n"
-            + "\n".join(violations)
+        assert not violations, "Contracts import infrastructure (DIP violation):\n" + "\n".join(
+            violations
         )
 
 
@@ -143,10 +139,8 @@ class TestCompositionRoot:
 
         module = ast.parse(main_file.read_text(encoding="utf-8"))
         function_names = [
-            node.name
-            for node in ast.walk(module)
-            if isinstance(node, ast.FunctionDef)
+            node.name for node in ast.walk(module) if isinstance(node, ast.FunctionDef)
         ]
-        assert "_compose_view_model" in function_names or "compose" in str(function_names), (
-            "main.py must contain a composition root function"
-        )
+        assert "_compose_view_model" in function_names or "compose" in str(
+            function_names
+        ), "main.py must contain a composition root function"

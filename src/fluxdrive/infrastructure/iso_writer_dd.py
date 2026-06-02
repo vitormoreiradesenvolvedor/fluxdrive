@@ -56,6 +56,25 @@ class DdIsoWriter(IIsoWriter):
 
         progress_callback(100, "Write complete.")
 
+    def _handle_dd_line(
+        self,
+        line: str,
+        total_bytes: int,
+        progress_callback: Callable[[int, str], None],
+    ) -> None:
+        """Parse one dd progress line and emit a progress callback.
+
+        Args:
+            line: One stderr line from the dd process.
+            total_bytes: Total expected bytes (used for percentage).
+            progress_callback: Progress reporting callback.
+        """
+        written = self._parse_dd_progress(line)
+        if written is not None and total_bytes > 0:
+            percent = min(99, int(written * 100 / total_bytes))
+            speed = self._extract_speed(line)
+            progress_callback(percent, f"Writing… {speed}")
+
     def _run_dd(
         self,
         iso_path: str,
@@ -83,21 +102,11 @@ class DdIsoWriter(IIsoWriter):
             "oflag=sync",
         ]
 
-        process = subprocess.Popen(
-            cmd,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        with subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True) as process:
+            assert process.stderr is not None
+            for line in process.stderr:
+                self._handle_dd_line(line, total_bytes, progress_callback)
 
-        assert process.stderr is not None
-        for line in process.stderr:
-            written = self._parse_dd_progress(line)
-            if written is not None and total_bytes > 0:
-                percent = min(99, int(written * 100 / total_bytes))
-                speed = self._extract_speed(line)
-                progress_callback(percent, f"Writing… {speed}")
-
-        process.wait()
         if process.returncode not in (0, None):
             raise WriteError(f"dd failed with exit code {process.returncode}")
 
@@ -149,6 +158,7 @@ class DdIsoWriter(IIsoWriter):
         subprocess.run(
             ["blockdev", "--flushbufs", device_path],
             capture_output=True,
+            check=False,
         )
 
 

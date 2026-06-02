@@ -26,8 +26,7 @@ def _python_files(path: Path) -> list[Path]:
     return [
         p
         for p in sorted(path.rglob("*.py"))
-        if "__pycache__" not in str(p)
-        and p.name not in _EXCLUDED_MODULES
+        if "__pycache__" not in str(p) and p.name not in _EXCLUDED_MODULES
     ]
 
 
@@ -82,9 +81,7 @@ class TestDocumentationCoverage:
                             f"{py_file.relative_to(SRC_PATH)}:{node.lineno} "
                             f"— class '{node.name}' missing docstring"
                         )
-        assert not violations, (
-            "Missing docstrings on public classes:\n" + "\n".join(violations)
-        )
+        assert not violations, "Missing docstrings on public classes:\n" + "\n".join(violations)
 
     def test_all_public_methods_have_docstrings(self) -> None:
         """Every public method and function in src must have a docstring."""
@@ -98,8 +95,8 @@ class TestDocumentationCoverage:
                             f"{py_file.relative_to(SRC_PATH)}:{node.lineno} "
                             f"— function/method '{node.name}' missing docstring"
                         )
-        assert not violations, (
-            "Missing docstrings on public functions/methods:\n" + "\n".join(violations)
+        assert not violations, "Missing docstrings on public functions/methods:\n" + "\n".join(
+            violations
         )
 
     def test_no_empty_docstrings(self) -> None:
@@ -120,6 +117,4 @@ class TestDocumentationCoverage:
                                     f"{py_file.relative_to(SRC_PATH)}:{node.lineno} "
                                     f"— '{node.name}' has a too-short docstring"
                                 )
-        assert not violations, (
-            "Trivially short docstrings:\n" + "\n".join(violations)
-        )
+        assert not violations, "Trivially short docstrings:\n" + "\n".join(violations)

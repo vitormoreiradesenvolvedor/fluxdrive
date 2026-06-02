@@ -1,5 +1,6 @@
 """Main application window — FluxDrive's primary user interface."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -23,6 +24,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from fluxdrive.domain.entities.device import Device
+from fluxdrive.domain.entities.iso_image import IsoImage
 from fluxdrive.domain.entities.write_config import WriteConfig
 from fluxdrive.domain.value_objects.cluster_size import ClusterSize
 from fluxdrive.domain.value_objects.file_system import FileSystem
@@ -30,6 +33,7 @@ from fluxdrive.domain.value_objects.partition_scheme import PartitionScheme
 from fluxdrive.domain.value_objects.target_system import TargetSystem
 from fluxdrive.domain.value_objects.write_mode import WriteMode
 from fluxdrive.ui.dialogs.about_dialog import AboutDialog
+from fluxdrive.ui.dialogs.download_dialog import DownloadDialog
 from fluxdrive.ui.dialogs.drive_properties_dialog import DrivePropertiesDialog
 from fluxdrive.ui.dialogs.hash_dialog import HashDialog
 from fluxdrive.ui.view_models.main_view_model import MainViewModel
@@ -37,6 +41,51 @@ from fluxdrive.ui.view_models.main_view_model import MainViewModel
 _WINDOW_TITLE = "FluxDrive — Bootable USB Creator"
 _WINDOW_MIN_WIDTH = 580
 _WINDOW_MIN_HEIGHT = 720
+
+
+@dataclass
+class _DeviceWidgets:
+    """Holds widget references for the device selection group."""
+
+    device_combo: QComboBox
+
+
+@dataclass
+class _IsoWidgets:
+    """Holds widget references for the ISO selection group."""
+
+    iso_label: QLineEdit
+    iso_info_label: QLabel
+
+
+@dataclass
+class _OptionsWidgets:
+    """Holds widget references for the write options group."""
+
+    partition_combo: QComboBox
+    target_combo: QComboBox
+    fs_combo: QComboBox
+    cluster_combo: QComboBox
+    label_edit: QLineEdit
+    mode_combo: QComboBox
+    bad_blocks_spin: QSpinBox
+    persistent_spin: QSpinBox
+
+
+@dataclass
+class _ProgressWidgets:
+    """Holds widget references for the progress display group."""
+
+    progress_bar: QProgressBar
+    progress_label: QLabel
+
+
+@dataclass
+class _ActionWidgets:
+    """Holds widget references for the action buttons."""
+
+    start_btn: QPushButton
+    cancel_btn: QPushButton
 
 
 class MainWindow(QMainWindow):
@@ -55,7 +104,14 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._vm = view_model
         self._selected_iso_path: Path | None = None
-        self._devices: list = []
+        self._devices: list[Device] = []
+        self._log_view: QTextEdit
+        self._status_bar: QStatusBar
+        self._device_widgets: _DeviceWidgets
+        self._iso_widgets: _IsoWidgets
+        self._options_widgets: _OptionsWidgets
+        self._progress_widgets: _ProgressWidgets
+        self._action_widgets: _ActionWidgets
 
         self._setup_window()
         self._build_ui()
@@ -98,9 +154,10 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Device")
         layout = QHBoxLayout(group)
 
-        self._device_combo = QComboBox()
-        self._device_combo.setMinimumWidth(300)
-        self._device_combo.setToolTip("Select the target USB drive.")
+        device_combo = QComboBox()
+        device_combo.setMinimumWidth(300)
+        device_combo.setToolTip("Select the target USB drive.")
+        self._device_widgets = _DeviceWidgets(device_combo=device_combo)
 
         refresh_btn = QPushButton("↺")
         refresh_btn.setFixedWidth(32)
@@ -111,7 +168,7 @@ class MainWindow(QMainWindow):
         props_btn.setToolTip("Show device details")
         props_btn.clicked.connect(self._on_show_device_properties)
 
-        layout.addWidget(self._device_combo, stretch=1)
+        layout.addWidget(device_combo, stretch=1)
         layout.addWidget(refresh_btn)
         layout.addWidget(props_btn)
         return group
@@ -126,9 +183,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(group)
 
         row1 = QHBoxLayout()
-        self._iso_label = QLineEdit()
-        self._iso_label.setPlaceholderText("No ISO selected — format only")
-        self._iso_label.setReadOnly(True)
+        iso_label = QLineEdit()
+        iso_label.setPlaceholderText("No ISO selected — format only")
+        iso_label.setReadOnly(True)
 
         browse_btn = QPushButton("Browse…")
         browse_btn.clicked.connect(self._on_browse_iso)
@@ -141,17 +198,112 @@ class MainWindow(QMainWindow):
         download_btn.setToolTip("Download a Linux distribution ISO")
         download_btn.clicked.connect(self._on_open_downloader)
 
-        row1.addWidget(self._iso_label, stretch=1)
+        row1.addWidget(iso_label, stretch=1)
         row1.addWidget(browse_btn)
         row1.addWidget(hash_btn)
         row1.addWidget(download_btn)
 
-        self._iso_info_label = QLabel("")
-        self._iso_info_label.setStyleSheet("color: #888; font-size: 11px;")
+        iso_info_label = QLabel("")
+        iso_info_label.setStyleSheet("color: #888; font-size: 11px;")
+        self._iso_widgets = _IsoWidgets(iso_label=iso_label, iso_info_label=iso_info_label)
 
         layout.addLayout(row1)
-        layout.addWidget(self._iso_info_label)
+        layout.addWidget(iso_info_label)
         return group
+
+    def _build_options_row1(self) -> QHBoxLayout:
+        """Build the partition scheme and target system option row.
+
+        Returns:
+            QHBoxLayout with partition scheme and target system combos.
+        """
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Partition Scheme:"))
+        partition_combo = QComboBox()
+        for scheme in PartitionScheme:
+            partition_combo.addItem(scheme.label(), scheme)
+        row.addWidget(partition_combo)
+
+        row.addWidget(QLabel("Target System:"))
+        target_combo = QComboBox()
+        for target in TargetSystem:
+            target_combo.addItem(target.label(), target)
+        row.addWidget(target_combo)
+
+        self._options_widgets.partition_combo = partition_combo
+        self._options_widgets.target_combo = target_combo
+        return row
+
+    def _build_options_row2(self) -> QHBoxLayout:
+        """Build the file system and cluster size option row.
+
+        Returns:
+            QHBoxLayout with filesystem and cluster size combos.
+        """
+        row = QHBoxLayout()
+        row.addWidget(QLabel("File System:"))
+        fs_combo = QComboBox()
+        for fs in FileSystem:
+            fs_combo.addItem(fs.label(), fs)
+        row.addWidget(fs_combo)
+
+        row.addWidget(QLabel("Cluster Size:"))
+        cluster_combo = QComboBox()
+        for cs in ClusterSize:
+            cluster_combo.addItem(cs.label(), cs)
+        row.addWidget(cluster_combo)
+
+        self._options_widgets.fs_combo = fs_combo
+        self._options_widgets.cluster_combo = cluster_combo
+        return row
+
+    def _build_options_row3(self) -> QHBoxLayout:
+        """Build the volume label and write mode option row.
+
+        Returns:
+            QHBoxLayout with label edit and write mode combo.
+        """
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Volume Label:"))
+        label_edit = QLineEdit()
+        label_edit.setMaxLength(11)
+        label_edit.setPlaceholderText("FLUXDRIVE")
+        row.addWidget(label_edit)
+
+        row.addWidget(QLabel("Write Mode:"))
+        mode_combo = QComboBox()
+        for mode in WriteMode:
+            mode_combo.addItem(mode.label(), mode)
+        row.addWidget(mode_combo)
+
+        self._options_widgets.label_edit = label_edit
+        self._options_widgets.mode_combo = mode_combo
+        return row
+
+    def _build_options_row4(self) -> QHBoxLayout:
+        """Build the bad blocks passes and persistent partition option row.
+
+        Returns:
+            QHBoxLayout with bad blocks and persistent partition spinboxes.
+        """
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Bad Blocks Passes:"))
+        bad_blocks_spin = QSpinBox()
+        bad_blocks_spin.setRange(0, 4)
+        bad_blocks_spin.setValue(0)
+        bad_blocks_spin.setSpecialValueText("None")
+        row.addWidget(bad_blocks_spin)
+
+        row.addWidget(QLabel("Persistent Partition (MiB):"))
+        persistent_spin = QSpinBox()
+        persistent_spin.setRange(0, 65536)
+        persistent_spin.setValue(0)
+        persistent_spin.setSpecialValueText("None")
+        row.addWidget(persistent_spin)
+
+        self._options_widgets.bad_blocks_spin = bad_blocks_spin
+        self._options_widgets.persistent_spin = persistent_spin
+        return row
 
     def _build_options_group(self) -> QGroupBox:
         """Build the write options group box.
@@ -162,64 +314,21 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Options")
         grid_layout = QVBoxLayout(group)
 
-        row1 = QHBoxLayout()
-        row1.addWidget(QLabel("Partition Scheme:"))
-        self._partition_combo = QComboBox()
-        for scheme in PartitionScheme:
-            self._partition_combo.addItem(scheme.label(), scheme)
-        row1.addWidget(self._partition_combo)
+        self._options_widgets = _OptionsWidgets(
+            partition_combo=QComboBox(),
+            target_combo=QComboBox(),
+            fs_combo=QComboBox(),
+            cluster_combo=QComboBox(),
+            label_edit=QLineEdit(),
+            mode_combo=QComboBox(),
+            bad_blocks_spin=QSpinBox(),
+            persistent_spin=QSpinBox(),
+        )
 
-        row1.addWidget(QLabel("Target System:"))
-        self._target_combo = QComboBox()
-        for target in TargetSystem:
-            self._target_combo.addItem(target.label(), target)
-        row1.addWidget(self._target_combo)
-
-        row2 = QHBoxLayout()
-        row2.addWidget(QLabel("File System:"))
-        self._fs_combo = QComboBox()
-        for fs in FileSystem:
-            self._fs_combo.addItem(fs.label(), fs)
-        row2.addWidget(self._fs_combo)
-
-        row2.addWidget(QLabel("Cluster Size:"))
-        self._cluster_combo = QComboBox()
-        for cs in ClusterSize:
-            self._cluster_combo.addItem(cs.label(), cs)
-        row2.addWidget(self._cluster_combo)
-
-        row3 = QHBoxLayout()
-        row3.addWidget(QLabel("Volume Label:"))
-        self._label_edit = QLineEdit()
-        self._label_edit.setMaxLength(11)
-        self._label_edit.setPlaceholderText("FLUXDRIVE")
-        row3.addWidget(self._label_edit)
-
-        row3.addWidget(QLabel("Write Mode:"))
-        self._mode_combo = QComboBox()
-        for mode in WriteMode:
-            self._mode_combo.addItem(mode.label(), mode)
-        row3.addWidget(self._mode_combo)
-
-        row4 = QHBoxLayout()
-        row4.addWidget(QLabel("Bad Blocks Passes:"))
-        self._bad_blocks_spin = QSpinBox()
-        self._bad_blocks_spin.setRange(0, 4)
-        self._bad_blocks_spin.setValue(0)
-        self._bad_blocks_spin.setSpecialValueText("None")
-        row4.addWidget(self._bad_blocks_spin)
-
-        row4.addWidget(QLabel("Persistent Partition (MiB):"))
-        self._persistent_spin = QSpinBox()
-        self._persistent_spin.setRange(0, 65536)
-        self._persistent_spin.setValue(0)
-        self._persistent_spin.setSpecialValueText("None")
-        row4.addWidget(self._persistent_spin)
-
-        grid_layout.addLayout(row1)
-        grid_layout.addLayout(row2)
-        grid_layout.addLayout(row3)
-        grid_layout.addLayout(row4)
+        grid_layout.addLayout(self._build_options_row1())
+        grid_layout.addLayout(self._build_options_row2())
+        grid_layout.addLayout(self._build_options_row3())
+        grid_layout.addLayout(self._build_options_row4())
         return group
 
     def _build_progress_group(self) -> QGroupBox:
@@ -231,16 +340,21 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Progress")
         layout = QVBoxLayout(group)
 
-        self._progress_bar = QProgressBar()
-        self._progress_bar.setRange(0, 100)
-        self._progress_bar.setValue(0)
-        self._progress_bar.setTextVisible(True)
+        progress_bar = QProgressBar()
+        progress_bar.setRange(0, 100)
+        progress_bar.setValue(0)
+        progress_bar.setTextVisible(True)
 
-        self._progress_label = QLabel("Ready.")
-        self._progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        progress_label = QLabel("Ready.")
+        progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout.addWidget(self._progress_bar)
-        layout.addWidget(self._progress_label)
+        self._progress_widgets = _ProgressWidgets(
+            progress_bar=progress_bar,
+            progress_label=progress_label,
+        )
+
+        layout.addWidget(progress_bar)
+        layout.addWidget(progress_label)
         return group
 
     def _build_log_group(self) -> QGroupBox:
@@ -268,22 +382,24 @@ class MainWindow(QMainWindow):
         """
         layout = QHBoxLayout()
 
-        self._start_btn = QPushButton("START")
-        self._start_btn.setMinimumHeight(40)
-        self._start_btn.setStyleSheet(
+        start_btn = QPushButton("START")
+        start_btn.setMinimumHeight(40)
+        start_btn.setStyleSheet(
             "QPushButton { background-color: #2a7af5; color: white; "
             "font-weight: bold; border-radius: 4px; } "
             "QPushButton:hover { background-color: #1a6ae5; } "
             "QPushButton:disabled { background-color: #888; }"
         )
-        self._start_btn.clicked.connect(self._on_start)
+        start_btn.clicked.connect(self._on_start)
 
-        self._cancel_btn = QPushButton("Cancel")
-        self._cancel_btn.setEnabled(False)
-        self._cancel_btn.clicked.connect(self._on_cancel)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setEnabled(False)
+        cancel_btn.clicked.connect(self._on_cancel)
 
-        layout.addWidget(self._start_btn)
-        layout.addWidget(self._cancel_btn)
+        self._action_widgets = _ActionWidgets(start_btn=start_btn, cancel_btn=cancel_btn)
+
+        layout.addWidget(start_btn)
+        layout.addWidget(cancel_btn)
         return layout
 
     def _build_menu_bar(self) -> None:
@@ -321,18 +437,18 @@ class MainWindow(QMainWindow):
         """Handle device refresh button click."""
         self._vm.refresh_devices()
 
-    def _on_devices_refreshed(self, devices: list) -> None:
+    def _on_devices_refreshed(self, devices: list[Device]) -> None:
         """Populate the device combo box with the refreshed list.
 
         Args:
             devices: List of Device entities.
         """
         self._devices = devices
-        self._device_combo.clear()
+        self._device_widgets.device_combo.clear()
         for device in devices:
-            self._device_combo.addItem(device.display_name(), device)
+            self._device_widgets.device_combo.addItem(device.display_name(), device)
         if not devices:
-            self._device_combo.addItem("No removable devices found", None)
+            self._device_widgets.device_combo.addItem("No removable devices found", None)
 
     def _on_browse_iso(self) -> None:
         """Open a file dialog to select an ISO or IMG file."""
@@ -345,7 +461,7 @@ class MainWindow(QMainWindow):
         if path_str:
             iso_path = Path(path_str)
             self._selected_iso_path = iso_path
-            self._iso_label.setText(str(iso_path))
+            self._iso_widgets.iso_label.setText(str(iso_path))
             self._vm.detect_iso(iso_path)
 
     def _on_iso_detected(self, iso: object) -> None:
@@ -354,13 +470,11 @@ class MainWindow(QMainWindow):
         Args:
             iso: IsoImage entity with detected properties.
         """
-        from fluxdrive.domain.entities.iso_image import IsoImage
-
         if isinstance(iso, IsoImage):
             bios = "BIOS" if iso.has_bios else ""
             uefi = "UEFI" if iso.has_uefi else ""
             boot_str = " + ".join(filter(None, [bios, uefi])) or "Unknown"
-            self._iso_info_label.setText(
+            self._iso_widgets.iso_info_label.setText(
                 f"  {iso.size_label()}  |  Boot: {boot_str}"
                 f"{'  |  Hybrid' if iso.is_hybrid else ''}"
                 f"{'  |  Label: ' + iso.label if iso.label else ''}"
@@ -376,14 +490,12 @@ class MainWindow(QMainWindow):
 
     def _on_open_downloader(self) -> None:
         """Open the ISO download dialog."""
-        from fluxdrive.ui.dialogs.download_dialog import DownloadDialog
-
         dialog = DownloadDialog(self._vm, self)
         dialog.exec()
 
     def _on_show_device_properties(self) -> None:
         """Open the device properties dialog for the selected device."""
-        current_data = self._device_combo.currentData()
+        current_data = self._device_widgets.device_combo.currentData()
         if current_data is None:
             QMessageBox.information(self, "No Device", "Please select a device first.")
             return
@@ -392,7 +504,7 @@ class MainWindow(QMainWindow):
 
     def _on_start(self) -> None:
         """Validate the configuration and start the write operation."""
-        device_data = self._device_combo.currentData()
+        device_data = self._device_widgets.device_combo.currentData()
         if device_data is None:
             QMessageBox.warning(self, "No Device", "Please select a target device.")
             return
@@ -413,8 +525,6 @@ class MainWindow(QMainWindow):
         Returns:
             True if the user confirmed the operation.
         """
-        from fluxdrive.domain.entities.device import Device
-
         device_str = device.display_name() if isinstance(device, Device) else str(device)
         reply = QMessageBox.warning(
             self,
@@ -435,30 +545,27 @@ class MainWindow(QMainWindow):
         Returns:
             Populated WriteConfig instance.
         """
-        from fluxdrive.domain.entities.device import Device
-
         assert isinstance(device, Device)
 
-        iso: object | None = None
+        iso: IsoImage | None = None
         if self._selected_iso_path is not None:
-            from fluxdrive.domain.entities.iso_image import IsoImage
-
             iso = IsoImage(
                 path=self._selected_iso_path,
                 size_bytes=self._selected_iso_path.stat().st_size,
             )
 
+        opts = self._options_widgets
         return WriteConfig(
             device=device,
-            iso_image=iso,  # type: ignore[arg-type]
-            partition_scheme=self._partition_combo.currentData(),
-            target_system=self._target_combo.currentData(),
-            file_system=self._fs_combo.currentData(),
-            cluster_size=self._cluster_combo.currentData(),
-            volume_label=self._label_edit.text().strip(),
-            write_mode=self._mode_combo.currentData(),
-            check_bad_blocks=self._bad_blocks_spin.value(),
-            create_persistent=self._persistent_spin.value(),
+            iso_image=iso,
+            partition_scheme=opts.partition_combo.currentData(),
+            target_system=opts.target_combo.currentData(),
+            file_system=opts.fs_combo.currentData(),
+            cluster_size=opts.cluster_combo.currentData(),
+            volume_label=opts.label_edit.text().strip(),
+            write_mode=opts.mode_combo.currentData(),
+            check_bad_blocks=opts.bad_blocks_spin.value(),
+            create_persistent=opts.persistent_spin.value(),
         )
 
     def _on_write_progress(self, percent: int, message: str) -> None:
@@ -468,15 +575,15 @@ class MainWindow(QMainWindow):
             percent: Progress value (0–100).
             message: Status message.
         """
-        self._progress_bar.setValue(percent)
+        self._progress_widgets.progress_bar.setValue(percent)
         if message:
-            self._progress_label.setText(message)
+            self._progress_widgets.progress_label.setText(message)
 
     def _on_write_finished(self) -> None:
         """Handle successful write completion."""
         self._set_ui_writing_state(False)
-        self._progress_bar.setValue(100)
-        self._progress_label.setText("Done!")
+        self._progress_widgets.progress_bar.setValue(100)
+        self._progress_widgets.progress_label.setText("Done!")
         self._status_bar.showMessage("Write completed successfully.")
         QMessageBox.information(
             self,
@@ -491,7 +598,7 @@ class MainWindow(QMainWindow):
             message: Error description.
         """
         self._set_ui_writing_state(False)
-        self._progress_label.setText("Error.")
+        self._progress_widgets.progress_label.setText("Error.")
         self._status_bar.showMessage(f"Error: {message}")
         QMessageBox.critical(self, "Write Error", message)
 
@@ -533,6 +640,6 @@ class MainWindow(QMainWindow):
         Args:
             writing: True when a write operation is in progress.
         """
-        self._start_btn.setEnabled(not writing)
-        self._cancel_btn.setEnabled(writing)
-        self._device_combo.setEnabled(not writing)
+        self._action_widgets.start_btn.setEnabled(not writing)
+        self._action_widgets.cancel_btn.setEnabled(writing)
+        self._device_widgets.device_combo.setEnabled(not writing)

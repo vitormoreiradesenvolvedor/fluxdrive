@@ -44,7 +44,5 @@ class CheckBadBlocksUseCase:
             BadBlocksError: If a fatal I/O error occurs.
         """
         if not 1 <= passes <= self.MAX_PASSES:
-            raise ValueError(
-                f"passes must be between 1 and {self.MAX_PASSES}, got {passes}."
-            )
+            raise ValueError(f"passes must be between 1 and {self.MAX_PASSES}, got {passes}.")
         return self._checker.check(device_path, passes, progress_callback)

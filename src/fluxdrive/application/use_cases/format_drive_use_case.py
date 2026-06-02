@@ -39,7 +39,5 @@ class FormatDriveUseCase:
             FormatError: If filesystem creation fails.
         """
         if not config.device.is_removable:
-            raise DeviceNotRemovableError(
-                f"Device {config.device.path} is not removable."
-            )
+            raise DeviceNotRemovableError(f"Device {config.device.path} is not removable.")
         self._formatter.format(config, progress_callback)

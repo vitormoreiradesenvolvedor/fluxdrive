@@ -25,9 +25,7 @@ class DeviceTooSmallError(DeviceError):
         """
         gib_dev = device_bytes / 1024**3
         gib_req = required_bytes / 1024**3
-        super().__init__(
-            f"Device has {gib_dev:.2f} GiB but {gib_req:.2f} GiB is required."
-        )
+        super().__init__(f"Device has {gib_dev:.2f} GiB but {gib_req:.2f} GiB is required.")
 
 
 class DeviceBusyError(DeviceError):

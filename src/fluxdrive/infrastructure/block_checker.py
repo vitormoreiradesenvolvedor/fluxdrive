@@ -47,8 +47,9 @@ class BadBlockChecker(IBlockChecker):
         result = subprocess.run(
             ["which", "badblocks"],
             capture_output=True,
+            check=False,
         )
-        return result.returncode == 0
+        return not result.returncode
 
     def _run_badblocks(
         self,
@@ -75,6 +76,7 @@ class BadBlockChecker(IBlockChecker):
             cmd,
             capture_output=True,
             text=True,
+            check=False,
         )
 
         bad_count = self._count_bad_blocks(result.stdout + result.stderr)
@@ -107,12 +109,11 @@ class BadBlockChecker(IBlockChecker):
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
 
-        if result.returncode != 0:
-            raise BadBlocksError(
-                f"Read verification failed: {result.stderr.strip()}"
-            )
+        if result.returncode:
+            raise BadBlocksError(f"Read verification failed: {result.stderr.strip()}")
 
         progress_callback(100, 0, "Read verification complete — no errors detected.")
         return 0

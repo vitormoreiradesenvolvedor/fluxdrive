@@ -61,9 +61,7 @@ class TestWriteIsoUseCase:
         with pytest.raises(DeviceNotRemovableError):
             use_case.execute(config, lambda p, m: None)
 
-    def test_raises_when_device_too_small(
-        self, sample_device: Device, tmp_path: Path
-    ) -> None:
+    def test_raises_when_device_too_small(self, sample_device: Device, tmp_path: Path) -> None:
         """execute() raises DeviceTooSmallError when device is smaller than ISO."""
         large_iso_file = tmp_path / "large.iso"
         large_iso_file.write_bytes(b"\x00" * 100)
@@ -83,9 +81,7 @@ class TestWriteIsoUseCase:
         with pytest.raises(DeviceTooSmallError):
             use_case.execute(config, lambda p, m: None)
 
-    def test_raises_when_iso_file_missing(
-        self, sample_device: Device
-    ) -> None:
+    def test_raises_when_iso_file_missing(self, sample_device: Device) -> None:
         """execute() raises IsoFileNotFoundError when ISO path doesn't exist."""
         missing_iso = IsoImage(
             path=Path("/nonexistent/path/test.iso"),
@@ -114,9 +110,7 @@ class TestWriteIsoUseCase:
         handler.write.assert_called_once()
         non_handler.write.assert_not_called()
 
-    def test_raises_when_no_writer_available(
-        self, sample_write_config: WriteConfig
-    ) -> None:
+    def test_raises_when_no_writer_available(self, sample_write_config: WriteConfig) -> None:
         """execute() raises RuntimeError when no writer handles the config."""
         non_handler = _make_writer(handles=False)
         use_case = WriteIsoUseCase(writers=[non_handler])

@@ -6,7 +6,10 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QLabel,
     QVBoxLayout,
+    QWidget,
 )
+
+from fluxdrive.domain.entities.device import Device
 
 
 class DrivePropertiesDialog(QDialog):
@@ -15,14 +18,14 @@ class DrivePropertiesDialog(QDialog):
     Shows path, model, vendor, size, removability, and partition layout.
     """
 
-    def __init__(self, device: object, parent: object = None) -> None:
+    def __init__(self, device: object, parent: QWidget | None = None) -> None:
         """Initialize the dialog with a Device entity.
 
         Args:
             device: Device entity to display properties for.
             parent: Optional parent widget.
         """
-        super().__init__(parent)  # type: ignore[call-arg]
+        super().__init__(parent)
         self._device = device
         self.setWindowTitle("Device Properties")
         self.setMinimumWidth(400)
@@ -32,8 +35,6 @@ class DrivePropertiesDialog(QDialog):
         """Construct the properties layout from the device entity."""
         layout = QVBoxLayout(self)
         form = QFormLayout()
-
-        from fluxdrive.domain.entities.device import Device
 
         if isinstance(self._device, Device):
             dev = self._device

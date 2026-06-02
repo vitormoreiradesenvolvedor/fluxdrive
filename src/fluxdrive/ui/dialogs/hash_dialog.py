@@ -13,9 +13,11 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from fluxdrive.domain.value_objects.hash_algorithm import HashAlgorithm
+from fluxdrive.ui.view_models.main_view_model import MainViewModel
 
 
 class HashDialog(QDialog):
@@ -25,7 +27,7 @@ class HashDialog(QDialog):
     pastes an expected digest to verify the file's integrity.
     """
 
-    def __init__(self, iso_path: Path, view_model: object, parent: object = None) -> None:
+    def __init__(self, iso_path: Path, view_model: object, parent: QWidget | None = None) -> None:
         """Initialize the hash dialog for a specific ISO file.
 
         Args:
@@ -33,7 +35,7 @@ class HashDialog(QDialog):
             view_model: MainViewModel instance providing hash operations.
             parent: Optional parent widget.
         """
-        super().__init__(parent)  # type: ignore[call-arg]
+        super().__init__(parent)
         self._iso_path = iso_path
         self._vm = view_model
 
@@ -88,8 +90,6 @@ class HashDialog(QDialog):
         algo = self._algo_combo.currentData()
         self._status_label.setText("Computing…")
         self._result_edit.clear()
-
-        from fluxdrive.ui.view_models.main_view_model import MainViewModel
 
         if isinstance(self._vm, MainViewModel):
             self._vm.compute_hash(self._iso_path, algo)

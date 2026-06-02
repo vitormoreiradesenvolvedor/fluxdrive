@@ -1,10 +1,13 @@
 """Use case for ISO hash verification."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from fluxdrive.application.contracts.i_hash_verifier import IHashVerifier
 from fluxdrive.domain.exceptions.write_errors import HashMismatchError
 from fluxdrive.domain.value_objects.hash_algorithm import HashAlgorithm
+
+_ProgressCallback = Callable[[int], None]
 
 
 class VerifyHashUseCase:
@@ -27,7 +30,7 @@ class VerifyHashUseCase:
         self,
         path: Path,
         algorithm: HashAlgorithm,
-        on_progress: object | None = None,
+        on_progress: _ProgressCallback | None = None,
     ) -> str:
         """Compute the hash of an ISO file.
 
@@ -39,20 +42,14 @@ class VerifyHashUseCase:
         Returns:
             Hex digest string in lowercase.
         """
-        from collections.abc import Callable
-
-        callback: Callable[[int], None] | None = None
-        if callable(on_progress):
-            callback = on_progress  # type: ignore[assignment]
-
-        return self._verifier.compute(path, algorithm, callback)
+        return self._verifier.compute(path, algorithm, on_progress)
 
     def verify_against(
         self,
         path: Path,
         algorithm: HashAlgorithm,
         expected: str,
-        on_progress: object | None = None,
+        on_progress: _ProgressCallback | None = None,
     ) -> None:
         """Verify an ISO file against a known-good digest.
 
@@ -65,12 +62,6 @@ class VerifyHashUseCase:
         Raises:
             HashMismatchError: If the file's digest does not match expected.
         """
-        from collections.abc import Callable
-
-        callback: Callable[[int], None] | None = None
-        if callable(on_progress):
-            callback = on_progress  # type: ignore[assignment]
-
-        actual = self._verifier.compute(path, algorithm, callback)
+        actual = self._verifier.compute(path, algorithm, on_progress)
         if actual.lower() != expected.lower():
             raise HashMismatchError(expected=expected, actual=actual)

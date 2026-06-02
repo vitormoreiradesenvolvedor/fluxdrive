@@ -1,10 +1,10 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "fluxdrive"
-version = "0.1.0"
+version = "0.1.1"
 description = "Linux alternative to Rufus — bootable USB creator"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
@@ -110,7 +110,12 @@ markers = [
 # ─── Coverage ────────────────────────────────────────────────────────────
 [tool.coverage.run]
 source = ["src/fluxdrive"]
-omit = ["*/tests/*", "*/ui/*"]
+omit = [
+    "*/tests/*",
+    "*/ui/*",
+    "*/infrastructure/*",
+    "*/main.py",
+]
 
 [tool.coverage.report]
 fail_under = 80

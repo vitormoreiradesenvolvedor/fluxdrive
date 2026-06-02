@@ -6,11 +6,7 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from fluxdrive.application.contracts.i_device_scanner import IDeviceScanner
 from fluxdrive.application.contracts.i_downloader import DownloadableIso
-from fluxdrive.application.use_cases.check_bad_blocks_use_case import CheckBadBlocksUseCase
-from fluxdrive.application.use_cases.detect_iso_type_use_case import DetectIsoTypeUseCase
-from fluxdrive.application.use_cases.download_iso_use_case import DownloadIsoUseCase
-from fluxdrive.application.use_cases.format_drive_use_case import FormatDriveUseCase
-from fluxdrive.application.use_cases.verify_hash_use_case import VerifyHashUseCase
+from fluxdrive.application.use_cases.use_case_registry import UseCaseRegistry
 from fluxdrive.application.use_cases.write_iso_use_case import WriteIsoUseCase
 from fluxdrive.domain.entities.device import Device
 from fluxdrive.domain.entities.iso_image import IsoImage
@@ -73,32 +69,17 @@ class MainViewModel(QObject):
     def __init__(
         self,
         device_scanner: IDeviceScanner,
-        write_use_case: WriteIsoUseCase,
-        format_use_case: FormatDriveUseCase,
-        detect_use_case: DetectIsoTypeUseCase,
-        hash_use_case: VerifyHashUseCase,
-        download_use_case: DownloadIsoUseCase,
-        bad_blocks_use_case: CheckBadBlocksUseCase,
+        use_cases: UseCaseRegistry,
     ) -> None:
         """Initialize with all required use cases (Dependency Injection).
 
         Args:
             device_scanner: IDeviceScanner implementation.
-            write_use_case: WriteIsoUseCase instance.
-            format_use_case: FormatDriveUseCase instance.
-            detect_use_case: DetectIsoTypeUseCase instance.
-            hash_use_case: VerifyHashUseCase instance.
-            download_use_case: DownloadIsoUseCase instance.
-            bad_blocks_use_case: CheckBadBlocksUseCase instance.
+            use_cases: Registry grouping all application use cases.
         """
         super().__init__()
         self._scanner = device_scanner
-        self._write = write_use_case
-        self._format = format_use_case
-        self._detect = detect_use_case
-        self._hash = hash_use_case
-        self._download = download_use_case
-        self._bad_blocks = bad_blocks_use_case
+        self._use_cases = use_cases
         self._worker: _WriteWorker | None = None
 
     def refresh_devices(self) -> list[Device]:
@@ -121,7 +102,7 @@ class MainViewModel(QObject):
         Returns:
             IsoImage entity with boot capabilities populated.
         """
-        iso = self._detect.execute(path)
+        iso = self._use_cases.detect.execute(path)
         self.iso_detected.emit(iso)
         self.log_message.emit(
             f"ISO detected: {iso.filename()} "
@@ -139,7 +120,7 @@ class MainViewModel(QObject):
             f"Starting write: {config.device.path} ← "
             f"{config.iso_image.filename() if config.iso_image else '(format only)'}"
         )
-        self._worker = _WriteWorker(self._write, config)
+        self._worker = _WriteWorker(self._use_cases.write, config)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
@@ -157,7 +138,7 @@ class MainViewModel(QObject):
             algorithm: Hash algorithm to use.
         """
         try:
-            digest = self._hash.compute_hash(path, algorithm)
+            digest = self._use_cases.hash.compute_hash(path, algorithm)
             self.hash_computed.emit(digest)
         except Exception as exc:  # noqa: BLE001
             self.hash_error.emit(str(exc))
@@ -168,7 +149,7 @@ class MainViewModel(QObject):
         Returns:
             List of DownloadableIso descriptors.
         """
-        return self._download.list_sources()
+        return self._use_cases.download.list_sources()
 
     def _on_progress(self, percent: int, message: str) -> None:
         """Forward progress updates and append to log.

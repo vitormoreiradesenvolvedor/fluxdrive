@@ -26,9 +26,7 @@ class TestWriteConfig:
         )
         assert config.is_format_only() is True
 
-    def test_is_not_format_only_when_iso_present(
-        self, sample_write_config: WriteConfig
-    ) -> None:
+    def test_is_not_format_only_when_iso_present(self, sample_write_config: WriteConfig) -> None:
         """is_format_only() returns False when iso_image is set."""
         assert sample_write_config.is_format_only() is False
 

@@ -12,7 +12,7 @@ _PVD_OFFSET = 0x8000
 _PVD_LABEL_OFFSET = 40
 _PVD_LABEL_LENGTH = 32
 _EFI_SIGNATURE = b"EFI PART"
-_BIOS_BOOT_SIGNATURE = b"\x55\xAA"
+_BIOS_BOOT_SIGNATURE = b"\x55\xaa"
 _BIOS_BOOT_OFFSET = 510
 _GPT_HEADER_OFFSET = 512
 
@@ -94,7 +94,7 @@ class IsoDetector(IIsoDetector):
             with path.open("rb") as fh:
                 fh.seek(_PVD_OFFSET - 2048)  # sector 15 = boot record descriptor
                 header = fh.read(2048)
-            if len(header) < 5 or header[0] != 0:
+            if len(header) < 5 or header[0]:
                 return False
             boot_catalog_lba = struct.unpack_from("<I", header, 71)[0]
             catalog_offset = boot_catalog_lba * 2048

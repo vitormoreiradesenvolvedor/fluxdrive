@@ -1,12 +1,14 @@
 """Drive formatter — partitions and creates filesystems on a USB device."""
 
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 from fluxdrive.application.contracts.i_drive_formatter import IDriveFormatter
 from fluxdrive.domain.entities.write_config import WriteConfig
 from fluxdrive.domain.exceptions.write_errors import FormatError, PartitioningError
+from fluxdrive.domain.value_objects.cluster_size import ClusterSize
 from fluxdrive.domain.value_objects.file_system import FileSystem
 from fluxdrive.domain.value_objects.partition_scheme import PartitionScheme
 
@@ -68,11 +70,10 @@ class DriveFormatter(IDriveFormatter):
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
-        if result.returncode != 0:
-            raise PartitioningError(
-                f"parted mklabel failed: {result.stderr.strip()}"
-            )
+        if result.returncode:
+            raise PartitioningError(f"parted mklabel failed: {result.stderr.strip()}")
 
     def _create_primary_partition(self, device_path: str) -> str:
         """Create a single primary partition spanning the entire device.
@@ -91,11 +92,10 @@ class DriveFormatter(IDriveFormatter):
             capture_output=True,
             text=True,
             timeout=30,
+            check=False,
         )
-        if result.returncode != 0:
-            raise PartitioningError(
-                f"parted mkpart failed: {result.stderr.strip()}"
-            )
+        if result.returncode:
+            raise PartitioningError(f"parted mkpart failed: {result.stderr.strip()}")
 
         partition = self._derive_partition_path(device_path)
         self._wait_for_partition(partition)
@@ -123,8 +123,6 @@ class DriveFormatter(IDriveFormatter):
         Raises:
             PartitioningError: If the partition does not appear within 10 seconds.
         """
-        import time
-
         deadline = time.monotonic() + 10.0
         while not Path(partition).exists():
             if time.monotonic() > deadline:
@@ -138,7 +136,7 @@ class DriveFormatter(IDriveFormatter):
         partition: str,
         fs: FileSystem,
         label: str,
-        cluster_size: object,
+        cluster_size: ClusterSize,
     ) -> None:
         """Run the appropriate mkfs command for the selected filesystem.
 
@@ -157,18 +155,60 @@ class DriveFormatter(IDriveFormatter):
             capture_output=True,
             text=True,
             timeout=120,
+            check=False,
         )
-        if result.returncode != 0:
-            raise FormatError(
-                f"{cmd[0]} failed: {result.stderr.strip()}"
-            )
+        if result.returncode:
+            raise FormatError(f"{cmd[0]} failed: {result.stderr.strip()}")
+
+    def _label_args(self, fs: FileSystem, label: str) -> list[str]:
+        """Build filesystem label arguments for the mkfs command.
+
+        Args:
+            fs: Filesystem type.
+            label: Volume label string.
+
+        Returns:
+            List of label flag arguments, or empty list when label is absent.
+        """
+        if not label:
+            return []
+        label_flags: dict[FileSystem, list[str]] = {
+            FileSystem.FAT32: ["-n"],
+            FileSystem.LARGE_FAT32: ["-n"],
+            FileSystem.NTFS: ["-L"],
+            FileSystem.EXFAT: ["-L"],
+            FileSystem.EXT4: ["-L"],
+            FileSystem.UDF: ["-l"],
+        }
+        flags = label_flags.get(fs, ["-L"])
+        truncated = label[:11] if fs in (FileSystem.FAT32, FileSystem.LARGE_FAT32) else label
+        return flags + [truncated]
+
+    def _cluster_args(self, fs: FileSystem, cluster_int: int) -> list[str]:
+        """Build cluster/allocation-unit size arguments for the mkfs command.
+
+        Args:
+            fs: Filesystem type.
+            cluster_int: Cluster size as an integer (0 = auto, skip).
+
+        Returns:
+            List of cluster flag arguments, or empty list when auto is selected.
+        """
+        if not cluster_int:
+            return []
+        cluster_flags: dict[FileSystem, list[str]] = {
+            FileSystem.FAT32: ["-S", str(cluster_int)],
+            FileSystem.NTFS: ["-c", str(cluster_int)],
+            FileSystem.EXT4: ["-b", str(cluster_int)],
+        }
+        return cluster_flags.get(fs, [])
 
     def _build_mkfs_command(
         self,
         partition: str,
         fs: FileSystem,
         label: str,
-        cluster_size: object,
+        cluster_size: ClusterSize,
     ) -> list[str]:
         """Build the mkfs command arguments for the selected filesystem.
 
@@ -182,34 +222,10 @@ class DriveFormatter(IDriveFormatter):
             Command list ready for subprocess.run().
         """
         cmd = [fs.mkfs_command()]
+        cmd.extend(self._label_args(fs, label))
+        cmd.extend(self._cluster_args(fs, int(cluster_size)))
 
-        if label:
-            label_flags = {
-                FileSystem.FAT32: ["-n"],
-                FileSystem.LARGE_FAT32: ["-n"],
-                FileSystem.NTFS: ["-L"],
-                FileSystem.EXFAT: ["-L"],
-                FileSystem.EXT4: ["-L"],
-                FileSystem.UDF: ["-l"],
-            }
-            flags = label_flags.get(fs, ["-L"])
-            cmd.extend(flags)
-            cmd.append(label[:11] if fs in (FileSystem.FAT32, FileSystem.LARGE_FAT32) else label)
-
-        cluster_int = int(cluster_size)  # type: ignore[arg-type]
-        if cluster_int > 0:
-            cluster_flags = {
-                FileSystem.FAT32: ["-S", str(cluster_int)],
-                FileSystem.NTFS: ["-c", str(cluster_int)],
-                FileSystem.EXT4: ["-b", str(cluster_int)],
-            }
-            extra = cluster_flags.get(fs)
-            if extra:
-                cmd.extend(extra)
-
-        if fs == FileSystem.FAT32:
-            cmd.extend(["-F", "32"])
-        elif fs == FileSystem.LARGE_FAT32:
+        if fs in (FileSystem.FAT32, FileSystem.LARGE_FAT32):
             cmd.extend(["-F", "32"])
         elif fs == FileSystem.NTFS:
             cmd.extend(["-f"])

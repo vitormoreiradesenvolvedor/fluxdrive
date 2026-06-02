@@ -11,6 +11,12 @@ set -euo pipefail
 
 VERSION="${VERSION:-$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(d['project']['version'])")}"
 ARCH="${ARCH:-x86_64}"
+
+# linuxdeploy-plugin-qt requires QMAKE to be set to qmake6 on Ubuntu 22.04+
+if [[ -z "${QMAKE:-}" ]]; then
+    QMAKE="$(command -v qmake6 2>/dev/null || command -v qmake 2>/dev/null || true)"
+    export QMAKE
+fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT}/dist"
 BUILD_DIR="${ROOT}/build/appimage"

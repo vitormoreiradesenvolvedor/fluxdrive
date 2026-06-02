@@ -119,10 +119,27 @@ ARCH="${ARCH}" APPIMAGE_EXTRACT_AND_RUN=1 \
 
 chmod +x "${OUTPUT_FILE}"
 
+# ─── Launcher script (Fedora / SELinux / Aurora OS compatibility) ─────────
+# On systems where FUSE execution is restricted by SELinux (Fedora, Aurora,
+# Silverblue, etc.) the AppImage runtime cannot exec AppRun from the FUSE
+# mount point. APPIMAGE_EXTRACT_AND_RUN=1 makes the runtime extract the
+# squashfs to a regular tmpfs directory instead, bypassing the restriction.
+LAUNCHER_FILE="${DIST_DIR}/FluxDrive-${VERSION}-${ARCH}.sh"
+cat > "${LAUNCHER_FILE}" << LAUNCHER
+#!/usr/bin/env bash
+# FluxDrive launcher — use this on Fedora / Aurora OS / SELinux systems
+# instead of running the .AppImage directly.
+SCRIPT_DIR="\$(dirname "\$(readlink -f "\${BASH_SOURCE[0]}")")"
+export APPIMAGE_EXTRACT_AND_RUN=1
+exec "\${SCRIPT_DIR}/FluxDrive-${VERSION}-${ARCH}.AppImage" "\$@"
+LAUNCHER
+chmod +x "${LAUNCHER_FILE}"
+
 # ─── Checksum ─────────────────────────────────────────────────────────────
 cd "${DIST_DIR}"
 sha256sum "$(basename "${OUTPUT_FILE}")" > "FluxDrive-${VERSION}-${ARCH}.AppImage.sha256"
 
 echo ""
-echo "✓ AppImage: ${OUTPUT_FILE}"
-echo "✓ SHA256:   ${DIST_DIR}/FluxDrive-${VERSION}-${ARCH}.AppImage.sha256"
+echo "✓ AppImage : ${OUTPUT_FILE}"
+echo "✓ Launcher : ${LAUNCHER_FILE}  (use on Fedora/Aurora/SELinux)"
+echo "✓ SHA256   : ${DIST_DIR}/FluxDrive-${VERSION}-${ARCH}.AppImage.sha256"

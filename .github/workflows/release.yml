@@ -123,5 +123,6 @@ jobs:
             Verifique a integridade do download com os arquivos `.sha256` e `.sha512`.
           files: |
             dist/FluxDrive-*.AppImage
+            dist/FluxDrive-*.sh
             dist/FluxDrive-*.sha256
             dist/FluxDrive-*.sha512

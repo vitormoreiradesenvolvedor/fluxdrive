@@ -82,3 +82,4 @@ jobs:
           files: |
             dist/FluxDrive-*.AppImage
             dist/FluxDrive-*.AppImage.sha256
+            dist/FluxDrive-*.sh

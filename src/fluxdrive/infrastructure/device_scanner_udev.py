@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import pyudev  # type: ignore[import-untyped]
+import pyudev
 
 from fluxdrive.application.contracts.i_device_scanner import IDeviceScanner
 from fluxdrive.domain.entities.device import Device
@@ -66,7 +66,7 @@ class UdevDeviceScanner(IDeviceScanner):
             udev_device: The udev Device object to check.
         """
         removable = udev_device.attributes.asstring(self._REMOVABLE_SYSATTR)
-        return removable.strip() == "1"
+        return bool(removable.strip() == "1")
 
     def _build_device(self, udev_device: pyudev.Device) -> Device | None:
         """Construct a Device entity from a udev Device object.
@@ -81,9 +81,7 @@ class UdevDeviceScanner(IDeviceScanner):
             path = Path(udev_device.device_node)
             size_bytes = self._read_size(udev_device)
             name = (
-                udev_device.get("ID_MODEL", "")
-                or udev_device.get("ID_FS_LABEL", "")
-                or path.name
+                udev_device.get("ID_MODEL", "") or udev_device.get("ID_FS_LABEL", "") or path.name
             )
             vendor = udev_device.get("ID_VENDOR", "")
             model = udev_device.get("ID_MODEL", "")

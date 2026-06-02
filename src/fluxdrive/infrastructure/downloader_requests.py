@@ -30,7 +30,10 @@ _CURATED_ISOS: list[DownloadableIso] = [
     ),
     DownloadableIso(
         name="Fedora Workstation 40",
-        url="https://dl.fedoraproject.org/pub/fedora/linux/releases/40/Workstation/x86_64/iso/Fedora-Workstation-Live-x86_64-40-1.14.iso",
+        url=(
+            "https://dl.fedoraproject.org/pub/fedora/linux/releases/40"
+            "/Workstation/x86_64/iso/Fedora-Workstation-Live-x86_64-40-1.14.iso"
+        ),
         size_bytes=2_252_341_248,
         sha256="",
         version="40",
@@ -38,7 +41,10 @@ _CURATED_ISOS: list[DownloadableIso] = [
     ),
     DownloadableIso(
         name="Debian 12.5 (netinst)",
-        url="https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.5.0-amd64-netinst.iso",
+        url=(
+            "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd"
+            "/debian-12.5.0-amd64-netinst.iso"
+        ),
         size_bytes=659_554_304,
         sha256="013f5b44670d81280b5b1bc02455842b250df2f0c6763398feb69af1a805a14f",
         version="12.5.0",
@@ -62,7 +68,10 @@ _CURATED_ISOS: list[DownloadableIso] = [
     ),
     DownloadableIso(
         name="openSUSE Tumbleweed (KDE)",
-        url="https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-DVD-x86_64-Current.iso",
+        url=(
+            "https://download.opensuse.org/tumbleweed/iso"
+            "/openSUSE-Tumbleweed-DVD-x86_64-Current.iso"
+        ),
         size_bytes=0,
         sha256="",
         version="Tumbleweed",

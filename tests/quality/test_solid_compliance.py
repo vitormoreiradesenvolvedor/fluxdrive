@@ -62,8 +62,7 @@ def _public_methods(cls_node: ast.ClassDef) -> list[ast.FunctionDef]:
     return [
         node
         for node in cls_node.body
-        if isinstance(node, ast.FunctionDef)
-        and not node.name.startswith("_")
+        if isinstance(node, ast.FunctionDef) and not node.name.startswith("_")
     ]
 
 

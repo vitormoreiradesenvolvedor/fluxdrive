@@ -43,6 +43,4 @@ class HashMismatchError(WriteError):
             expected: The hash value that was expected.
             actual: The hash value that was computed.
         """
-        super().__init__(
-            f"Hash mismatch — expected: {expected!r}, got: {actual!r}"
-        )
+        super().__init__(f"Hash mismatch — expected: {expected!r}, got: {actual!r}")

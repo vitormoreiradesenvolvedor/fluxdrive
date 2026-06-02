@@ -1,7 +1,7 @@
 """About dialog — displays application version and license information."""
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout, QWidget
 
 from fluxdrive import __version__
 
@@ -9,13 +9,13 @@ from fluxdrive import __version__
 class AboutDialog(QDialog):
     """Modal dialog displaying FluxDrive version and license information."""
 
-    def __init__(self, parent: object = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         """Initialize the about dialog.
 
         Args:
             parent: Optional parent widget.
         """
-        super().__init__(parent)  # type: ignore[call-arg]
+        super().__init__(parent)
         self.setWindowTitle("About FluxDrive")
         self.setMinimumWidth(360)
         self._build_ui()

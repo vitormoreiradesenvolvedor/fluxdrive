@@ -8,7 +8,6 @@ from pathlib import Path
 from fluxdrive.application.contracts.i_iso_writer import IIsoWriter
 from fluxdrive.domain.entities.write_config import WriteConfig
 from fluxdrive.domain.exceptions.write_errors import BootloaderInstallError, WriteError
-from fluxdrive.domain.value_objects.target_system import TargetSystem
 from fluxdrive.domain.value_objects.write_mode import WriteMode
 from fluxdrive.infrastructure.drive_formatter import DriveFormatter
 
@@ -55,27 +54,38 @@ class IsoModeWriter(IIsoWriter):
         progress_callback(25, "Mounting ISO…")
         with tempfile.TemporaryDirectory(prefix="fluxdrive-iso-") as mount_dir:
             self._mount_iso(config.iso_image.path, Path(mount_dir))
-
-            progress_callback(30, "Copying files from ISO…")
-            partition = self._get_partition_path(str(config.device.path))
-            with tempfile.TemporaryDirectory(prefix="fluxdrive-dev-") as dev_dir:
-                self._mount_device(partition, Path(dev_dir))
-                self._copy_files(Path(mount_dir), Path(dev_dir), progress_callback)
-                progress_callback(85, "Installing bootloader…")
-                self._install_bootloader(config, Path(dev_dir), Path(mount_dir))
-                self._unmount(Path(dev_dir))
-
+            self._write_to_mounted_partition(config, Path(mount_dir), progress_callback)
             self._unmount(Path(mount_dir))
 
         if config.create_persistent > 0:
             progress_callback(92, "Creating persistent partition…")
-            self._add_persistent_partition(
-                str(config.device.path), config.create_persistent
-            )
+            self._add_persistent_partition(str(config.device.path), config.create_persistent)
 
         progress_callback(98, "Flushing buffers…")
         subprocess.run(["sync"], check=True)
         progress_callback(100, "Write complete.")
+
+    def _write_to_mounted_partition(
+        self,
+        config: WriteConfig,
+        mount_dir: Path,
+        progress_callback: Callable[[int, str], None],
+    ) -> None:
+        """Mount device partition, copy files, and install bootloader.
+
+        Args:
+            config: Write configuration with device and iso_image set.
+            mount_dir: Directory where the ISO is already loop-mounted.
+            progress_callback: Called with (percent: int, message: str).
+        """
+        progress_callback(30, "Copying files from ISO…")
+        partition = self._get_partition_path(str(config.device.path))
+        with tempfile.TemporaryDirectory(prefix="fluxdrive-dev-") as dev_dir:
+            self._mount_device(partition, Path(dev_dir))
+            self._copy_files(mount_dir, Path(dev_dir), progress_callback)
+            progress_callback(85, "Installing bootloader…")
+            self._install_bootloader(config, Path(dev_dir), mount_dir)
+            self._unmount(Path(dev_dir))
 
     def _mount_iso(self, iso_path: Path, mount_point: Path) -> None:
         """Loop-mount the ISO file at a temporary directory.
@@ -91,8 +101,9 @@ class IsoModeWriter(IIsoWriter):
             ["mount", "-o", "loop,ro", str(iso_path), str(mount_point)],
             capture_output=True,
             text=True,
+            check=False,
         )
-        if result.returncode != 0:
+        if result.returncode:
             raise WriteError(f"Failed to mount ISO: {result.stderr.strip()}")
 
     def _mount_device(self, partition: str, mount_point: Path) -> None:
@@ -109,8 +120,9 @@ class IsoModeWriter(IIsoWriter):
             ["mount", partition, str(mount_point)],
             capture_output=True,
             text=True,
+            check=False,
         )
-        if result.returncode != 0:
+        if result.returncode:
             raise WriteError(f"Failed to mount partition: {result.stderr.strip()}")
 
     def _copy_files(
@@ -139,6 +151,7 @@ class IsoModeWriter(IIsoWriter):
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
         if result.returncode not in (0, 24):
             raise WriteError(f"rsync failed: {result.stderr.strip()}")
@@ -165,9 +178,7 @@ class IsoModeWriter(IIsoWriter):
         if config.target_system.requires_uefi_bootloader():
             self._ensure_efi_present(dev_mount, iso_mount)
 
-    def _install_syslinux(
-        self, device_path: str, dev_mount: Path, iso_mount: Path
-    ) -> None:
+    def _install_syslinux(self, device_path: str, dev_mount: Path, iso_mount: Path) -> None:
         """Install syslinux/isolinux as the BIOS bootloader.
 
         Args:
@@ -194,11 +205,10 @@ class IsoModeWriter(IIsoWriter):
             ["syslinux", "--install", "--directory", "syslinux", f"{device_path}1"],
             capture_output=True,
             text=True,
+            check=False,
         )
-        if result.returncode != 0:
-            raise BootloaderInstallError(
-                f"syslinux install failed: {result.stderr.strip()}"
-            )
+        if result.returncode:
+            raise BootloaderInstallError(f"syslinux install failed: {result.stderr.strip()}")
 
     def _ensure_efi_present(self, dev_mount: Path, iso_mount: Path) -> None:
         """Verify the EFI directory was copied from the ISO.
@@ -216,16 +226,12 @@ class IsoModeWriter(IIsoWriter):
         efi_on_device = dev_mount / "EFI"
         efi_on_iso = iso_mount / "EFI"
 
-        if not efi_on_device.exists():
-            if not efi_on_iso.exists():
-                raise BootloaderInstallError(
-                    "No EFI directory found in the ISO. "
-                    "This ISO may not support UEFI boot."
-                )
+        if not efi_on_device.exists() and not efi_on_iso.exists():
+            raise BootloaderInstallError(
+                "No EFI directory found in the ISO. This ISO may not support UEFI boot."
+            )
 
-    def _add_persistent_partition(
-        self, device_path: str, size_mib: int
-    ) -> None:
+    def _add_persistent_partition(self, device_path: str, size_mib: int) -> None:
         """Append a casper-rw persistent partition at the end of the device.
 
         Args:
@@ -245,12 +251,14 @@ class IsoModeWriter(IIsoWriter):
             ],
             capture_output=True,
             text=True,
+            check=False,
         )
-        if result.returncode == 0:
+        if not result.returncode:
             part2 = f"{device_path}2" if not device_path[-1].isdigit() else f"{device_path}p2"
             subprocess.run(
                 ["mkfs.ext4", "-L", "casper-rw", part2],
                 capture_output=True,
+                check=False,
             )
 
     def _unmount(self, mount_point: Path) -> None:
@@ -259,7 +267,7 @@ class IsoModeWriter(IIsoWriter):
         Args:
             mount_point: The directory to unmount.
         """
-        subprocess.run(["umount", str(mount_point)], capture_output=True)
+        subprocess.run(["umount", str(mount_point)], capture_output=True, check=False)
 
     def _get_partition_path(self, device_path: str) -> str:
         """Derive the first partition path from a disk device path.

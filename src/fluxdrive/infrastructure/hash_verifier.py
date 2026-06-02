@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from fluxdrive.application.contracts.i_hash_verifier import IHashVerifier
+from fluxdrive.domain.exceptions.write_errors import HashMismatchError
 from fluxdrive.domain.value_objects.hash_algorithm import HashAlgorithm
 
 _CHUNK_SIZE = 65536  # 64 KiB per read — balances memory and syscall overhead
@@ -67,8 +68,6 @@ class HashlibHashVerifier(IHashVerifier):
         Raises:
             HashMismatchError: If the digests do not match.
         """
-        from fluxdrive.domain.exceptions.write_errors import HashMismatchError
-
         actual = self.compute(path, algorithm, progress_callback)
         if actual.lower() != expected_digest.lower():
             raise HashMismatchError(expected=expected_digest, actual=actual)

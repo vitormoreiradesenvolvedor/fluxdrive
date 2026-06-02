@@ -61,13 +61,9 @@ class WriteIsoUseCase:
 
         if config.iso_image is not None:
             if not config.iso_image.path.exists():
-                raise IsoFileNotFoundError(
-                    f"ISO file not found: {config.iso_image.path}"
-                )
+                raise IsoFileNotFoundError(f"ISO file not found: {config.iso_image.path}")
             if not config.device.is_large_enough_for(config.iso_image.size_bytes):
-                raise DeviceTooSmallError(
-                    config.device.size_bytes, config.iso_image.size_bytes
-                )
+                raise DeviceTooSmallError(config.device.size_bytes, config.iso_image.size_bytes)
 
     def _select_writer(self, config: WriteConfig) -> IIsoWriter:
         """Return the first writer that can handle the given config.
@@ -81,6 +77,4 @@ class WriteIsoUseCase:
         for writer in self._writers:
             if writer.can_handle(config):
                 return writer
-        raise RuntimeError(
-            f"No writer available for write mode: {config.write_mode}"
-        )
+        raise RuntimeError(f"No writer available for write mode: {config.write_mode}")

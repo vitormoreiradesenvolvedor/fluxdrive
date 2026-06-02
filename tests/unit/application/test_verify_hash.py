@@ -14,9 +14,7 @@ from fluxdrive.domain.value_objects.hash_algorithm import HashAlgorithm
 class TestVerifyHashUseCase:
     """Tests for VerifyHashUseCase delegation and error propagation."""
 
-    def test_compute_hash_delegates_to_verifier(
-        self, mock_hash_verifier: MagicMock
-    ) -> None:
+    def test_compute_hash_delegates_to_verifier(self, mock_hash_verifier: MagicMock) -> None:
         """compute_hash() returns the value from the injected verifier."""
         mock_hash_verifier.compute.return_value = "abc123"
         use_case = VerifyHashUseCase(verifier=mock_hash_verifier)
@@ -26,9 +24,7 @@ class TestVerifyHashUseCase:
         mock_hash_verifier.compute.assert_called_once()
         assert result == "abc123"
 
-    def test_verify_against_raises_on_mismatch(
-        self, mock_hash_verifier: MagicMock
-    ) -> None:
+    def test_verify_against_raises_on_mismatch(self, mock_hash_verifier: MagicMock) -> None:
         """verify_against() raises HashMismatchError when digests differ."""
         mock_hash_verifier.compute.return_value = "actual_digest"
         use_case = VerifyHashUseCase(verifier=mock_hash_verifier)
@@ -40,9 +36,7 @@ class TestVerifyHashUseCase:
                 "expected_different_digest",
             )
 
-    def test_verify_against_succeeds_on_match(
-        self, mock_hash_verifier: MagicMock
-    ) -> None:
+    def test_verify_against_succeeds_on_match(self, mock_hash_verifier: MagicMock) -> None:
         """verify_against() does not raise when digest matches."""
         mock_hash_verifier.compute.return_value = "correctdigest"
         use_case = VerifyHashUseCase(verifier=mock_hash_verifier)

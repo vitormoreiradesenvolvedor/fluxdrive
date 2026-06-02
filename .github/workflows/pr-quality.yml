@@ -281,14 +281,16 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - name: Install dependencies (uninstall pytest-qt — headless job, AST tests only)
+        run: |
+          pip install -e ".[dev]"
+          pip uninstall -y pytest-qt
       - name: Run custom SOLID compliance tests
         run: |
           pytest tests/quality/ \
             -v \
             --tb=short \
-            -x \
-            -p no:qt
+            -x
 
   # ─── Gate Final: todos devem passar ──────────────────────────────────────
   quality-gate:

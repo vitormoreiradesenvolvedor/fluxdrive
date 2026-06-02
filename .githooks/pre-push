@@ -3,9 +3,16 @@
 # Essas branches só recebem código via merge de PRs aprovados na CI.
 
 PROTECTED_BRANCHES="^refs/heads/(master|development)$"
+NULL_SHA="0000000000000000000000000000000000000000"
 
 while read local_ref local_sha remote_ref remote_sha; do
     if [[ "$remote_ref" =~ $PROTECTED_BRANCHES ]]; then
+        # Permite apenas o push inicial (quando a branch ainda não existe no remoto).
+        # Todos os pushes subsequentes para branches já existentes são bloqueados.
+        if [[ "$remote_sha" == "$NULL_SHA" ]]; then
+            continue
+        fi
+
         BRANCH_NAME=$(echo "$remote_ref" | sed 's|refs/heads/||')
         echo ""
         echo "╔══════════════════════════════════════════════════════════════╗"

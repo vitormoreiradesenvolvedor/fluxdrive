@@ -51,7 +51,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libxcb-xinerama0 libxcb-cursor0 libegl1 libgl1 \
             libfuse2 wget patchelf desktop-file-utils \
-            libglib2.0-dev
+            libglib2.0-dev qt6-base-dev
           pip install --upgrade pip
           pip install -e ".[dev]" pyinstaller
 
